@@ -1,0 +1,172 @@
+// Prisma 7 스키마
+// 변경 후 반드시 `pnpm db:migrate` (개발) 또는 `pnpm db:generate` 실행
+
+generator client {
+  provider = "prisma-client"
+  // Prisma 7 의 prisma-client 제너레이터는 output 이 필수이고 TypeScript 소스를 생성합니다.
+  // src/ 안에 두어야 tsc 빌드 결과(dist)에 함께 포함됩니다.
+  output                 = "../src/generated/prisma"
+  runtime                = "nodejs"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "js"
+}
+
+// Prisma 7 부터 스키마 안의 `url` 은 금지됩니다.
+//  · 마이그레이션용 URL → prisma.config.ts 의 datasource.url (DIRECT_URL)
+//  · 런타임 URL        → PrismaClient 생성 시 adapter (DATABASE_URL, src/index.ts 참고)
+datasource db {
+  provider = "postgresql"
+}
+
+/// 사용자 프로필.
+///
+/// 인증은 **Supabase Auth** 가 담당하고, 실제 계정은 Supabase 가 관리하는
+/// `auth.users` 테이블(= auth 스키마)에 있습니다. 이 테이블은 그 계정에 딸린
+/// 프로필이자, 도메인 테이블들이 참조할 수 있는 public 스키마 쪽 기준점입니다.
+///
+///  · `id` 는 `auth.users.id`(UUID) 를 그대로 씁니다. 따로 생성하지 않습니다.
+///  · `auth` 스키마는 Supabase 가 관리하므로 DB 레벨 외래키는 걸지 않습니다.
+///    (마이그레이션이 남의 스키마를 건드리면 깨지기 쉽습니다)
+///  · 행은 첫 로그인 때 upsert 로 만듭니다.
+model User {
+  id    String  @id @db.Uuid
+  email String? @unique
+  name  String?
+  image String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents         Document[]
+  reviews           Review[]
+  interviewSessions InterviewSession[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 도메인
+// ─────────────────────────────────────────────────────────────
+
+enum DocumentKind {
+  RESUME // 이력서
+  COVER_LETTER // 자소서
+  PORTFOLIO // 포트폴리오
+}
+
+enum DocumentSource {
+  TEXT // 직접 입력
+  FILE // 파일 업로드
+}
+
+/// 사용자가 등록한 이력서/자소서.
+///
+/// content 는 Claude 에 넘기는 본문 텍스트입니다. 파일로 올린 경우에도
+/// 등록 시점에 텍스트를 추출해서 채우므로(추출 실패 = 등록 실패) nullable 이
+/// 아닙니다. 추출을 비동기로 돌릴 필요가 생기면 상태 컬럼을 추가하세요.
+model Document {
+  id      String         @id @default(cuid())
+  userId  String         @db.Uuid
+  kind    DocumentKind
+  source  DocumentSource
+  title   String
+  content String
+
+  // source = FILE 인 경우에만 채웁니다.
+  fileName String?
+  filePath String? // 저장소 객체 키
+  fileSize Int?
+  mimeType String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviews           Review[]
+  interviewSessions InterviewSession[]
+
+  @@index([userId, createdAt])
+  @@map("documents")
+}
+
+/// 자소서 첨삭 1회 결과.
+model Review {
+  id         String @id @default(cuid())
+  userId     String @db.Uuid
+  documentId String
+
+  feedback String // Claude 응답 (마크다운)
+  model    String // 생성에 사용한 모델 ID
+
+  // 비용 추적용 — 집계해서 레이트리밋/가드에 씁니다.
+  inputTokens  Int?
+  outputTokens Int?
+
+  createdAt DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([documentId])
+  @@map("reviews")
+}
+
+enum InterviewStatus {
+  ACTIVE
+  COMPLETED
+}
+
+/// 난이도 차이는 **꼬리질문 개수와 파고드는 깊이**로 둡니다.
+/// (질문 주제 자체를 바꾸지 않습니다 — interview-prompt.ts 참고)
+enum InterviewDifficulty {
+  EASY // 쉬움
+  NORMAL // 보통
+  HARD // 어려움
+}
+
+/// 면접 세션 1건. documentId 는 선택 — 등록 문서 없이 일반 면접도 가능합니다.
+model InterviewSession {
+  id         String  @id @default(cuid())
+  userId     String  @db.Uuid
+  documentId String?
+
+  title      String
+  status     InterviewStatus     @default(ACTIVE)
+  difficulty InterviewDifficulty @default(NORMAL)
+  summary    String? // 종료 후 총평
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  messages Message[]
+
+  @@index([userId, createdAt])
+  @@map("interview_sessions")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+/// 면접 대화 메시지. 항상 createdAt 순으로 조회해서 Claude 에 넘깁니다.
+model Message {
+  id        String      @id @default(cuid())
+  sessionId String
+  role      MessageRole
+  content   String
+
+  inputTokens  Int?
+  outputTokens Int?
+
+  createdAt DateTime @default(now())
+
+  session InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("messages")
+}

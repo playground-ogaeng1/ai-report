@@ -1,0 +1,15 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# pnpm 10 은 의존성의 설치 스크립트를 기본 차단합니다.
+# 아래 목록에 있는 패키지만 빌드 스크립트 실행을 허용합니다.
+# (pnpm 11 부터는 이 키가 `allowBuilds` 맵 문법으로 바뀝니다)
+onlyBuiltDependencies:
+  - prisma
+  - '@prisma/engines'
+
+# 빌드하지 않아도 동작하는(선택적 네이티브 바이너리) 패키지 — 경고만 끕니다.
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver

@@ -1,0 +1,28 @@
+{
+  "name": "ppp",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.28.1",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "diagnose": "node scripts/diagnose.mjs",
+    "dev": "pnpm db:build && pnpm -r --parallel --stream dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api dev",
+    "build": "pnpm db:build && pnpm --filter api build && pnpm --filter web build",
+    "db:generate": "pnpm --filter @ppp/db generate",
+    "db:build": "pnpm --filter @ppp/db build",
+    "db:migrate": "pnpm --filter @ppp/db migrate",
+    "db:deploy": "pnpm --filter @ppp/db deploy",
+    "db:studio": "pnpm --filter @ppp/db studio",
+    "typecheck": "pnpm --filter api exec tsc --noEmit -p tsconfig.json && pnpm --filter web exec tsc --noEmit -p tsconfig.json",
+    "test": "pnpm -r --if-present test",
+    "lint": "pnpm -r --if-present lint",
+    "test:e2e": "pnpm --filter api test:e2e"
+  },
+  "devDependencies": {
+    "dotenv": "^18.0.9"
+  }
+}

@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+
+  /* 브라우저가 그리는 네이티브 UI(select 드롭다운 목록, 스크롤바, 체크박스,
+     날짜 선택기)의 테마를 결정합니다. 이걸 선언하지 않으면 브라우저는
+     페이지를 라이트 모드로 보고 드롭다운을 흰 배경으로 그리는데, 글자색은
+     페이지에서 상속받아 밝은 색이 되어 흰 배경에 흰 글자가 됩니다. */
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    color-scheme: dark;
+  }
+}
+
+/* color-scheme 만으로 대부분 해결되지만, 브라우저·OS 조합에 따라 option 의
+   배경을 select 의 computed background 에서 가져오는 경우가 있어 명시합니다. */
+option {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
