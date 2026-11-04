@@ -84,7 +84,8 @@ NestJS 실행 순서는 **미들웨어 → 가드 → 인터셉터 → 핸들러
 - `CostGuard` 는 **Claude 를 호출하는 엔드포인트에만** 붙인다. 업로드처럼
   토큰을 쓰지 않는 곳에는 레이트리밋만
 - 레이트리밋이 메모리라서 **인스턴스를 늘리면 실효 한도가 곱해진다.**
-  수평 확장 시 Redis 로 옮겨야 한다
+  수평 확장 시 Redis 로 옮겨야 한다. 현재는 **Render 단일 인스턴스**라 설계대로 동작한다 —
+  이 전제가 깨지는 순간(스케일업·서버리스 이전) 함께 고쳐야 한다
 - 한도를 바꿀 땐 `@RateLimit({max, windowSec})` 과 `DAILY_TOKEN_LIMIT` 를 본다
 
 ### 인증
@@ -103,6 +104,22 @@ NestJS 실행 순서는 **미들웨어 → 가드 → 인터셉터 → 핸들러
 - `proxy.ts` 에서 **Supabase 세션 갱신은 필수다.** 안 하면 토큰이 만료돼 로그아웃된다. 다만 여기에 **DB 조회는 넣지 않는다** — 모든 요청 앞단에서 돌기 때문이다. 소유권 확인 같은 건 api 에서 한다
 - `proxy.ts` 는 `setAll` 이 마지막으로 만든 응답 객체를 **그대로 반환**해야 한다. 중간에 새 응답을 만들어 반환하면 갱신된 쿠키가 실리지 않아 다음 요청에서 로그아웃된다
 - `cookies()`, `searchParams`, `params` 는 모두 **async** 다 — `await` 를 빼먹으면 런타임에서 터진다
+
+### 배포
+**web → Vercel(`apps/web`), api → Render(레포 루트 `render.yaml`).** 자세한 절차는 [SETUP.md](./SETUP.md) Step 9.
+
+- **`.env` 는 gitignore 대상이라 배포되지 않는다.** 로컬 파일을 고치는 것과 배포 환경에
+  값을 넣는 것은 **별개의 일**이다. 환경변수 얘기가 나오면 둘 중 어느 쪽인지 먼저 확인한다
+- `SUPABASE_URL` 이 없으면 `SupabaseAuthGuard` 가 DI 시점에 throw 해서 **부팅 자체가 실패**한다.
+  나머지 키는 해당 기능만 503 이다 — 증상이 다르니 구분해서 진단한다
+- **502 + CORS 에러를 CORS 설정 문제로 오진하지 말 것.** api 가 안 떠 있으면 응답이 플랫폼의
+  502 페이지이고 `Access-Control-Allow-Origin` 이 없다 → 브라우저는 CORS 에러로 표시한다.
+  `curl -D - <api>/health` 를 먼저 본다 (`x-render-routing: no-deploy` = 배포 없음)
+- `CORS_ORIGIN` 은 **쉼표 구분 목록**이다. Vercel 프리뷰 URL 은 커밋마다 바뀌어서 넣을 수 없다
+- Render 는 **루트 디렉터리 밖 파일을 제공하지 않는다** → Root Directory 를 비우고
+  빌드는 레포 루트에서. 빌드 명령에 **`pnpm db:build` 가 먼저** 와야 한다
+- 무료 플랜은 15분 유휴 후 스핀다운(재기동 ~1분)이고 Pre-Deploy·셸이 없다 →
+  마이그레이션은 **로컬에서** `pnpm db:deploy`
 
 ### 건드리지 말 것
 - `apps/web/AGENTS.md`, `apps/api/AGENTS.md` — 프레임워크가 자동 생성/덮어쓰는 파일

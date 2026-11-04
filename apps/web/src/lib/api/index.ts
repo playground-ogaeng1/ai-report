@@ -170,11 +170,16 @@ export type Review = {
 /**
  * 스트리밍 엔드포인트가 흘려보내는 NDJSON 이벤트.
  * 첨삭·면접·총평이 모두 같은 모양을 씁니다.
+ *
+ * `ping` 은 화면에 쓸 내용이 없는 연결 유지용입니다 — 모델이 사고하는 동안
+ * 응답에 바이트가 0개 나가서 프록시가 연결을 끊는 걸 막습니다. 소비하는 쪽은
+ * 그냥 무시하면 됩니다(`use-stream-text` 의 switch 에 default 가 없습니다).
  */
 export type StreamTextEvent =
   | { type: "text"; text: string }
   | { type: "done" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "ping" };
 
 /** GET /usage — 비용 가드 상태 */
 export type UsageSnapshot = {

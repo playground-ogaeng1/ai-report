@@ -513,10 +513,84 @@ Node 는 이것을 뭉뚱그려 `fetch failed` 로만 알려줍니다.
 | NestJS 에서 `Cannot find module './x'` | ESM 프로젝트입니다. import 에 `.js` 확장자를 붙이세요 |
 | 설치하니 Prisma 8 RC 가 깔림 | 버전을 명시하세요: `prisma@7.10.1` |
 
+---
+
+## Step 9. 배포 — web → Vercel, api → Render
+
+### ⚠️ 먼저 알아야 할 것: `.env` 는 배포되지 않습니다
+
+`.env` / `.env.local` 은 전부 `.gitignore` 대상입니다. **로컬 파일을 고쳐도 배포 환경에는
+아무 값도 전달되지 않습니다** — Render·Vercel 대시보드에 직접 입력해야 합니다.
+
+누락 시 증상이 크게 다릅니다:
+
+| 빠진 변수 | 증상 |
+|---|---|
+| `SUPABASE_URL` | **부팅 실패.** `SupabaseAuthGuard` 가 DI 시점에 throw → Render 가 `502 + x-render-routing: no-deploy` |
+| `DATABASE_URL` | 부팅은 되지만 `/health` 가 `db:down` |
+| `CORS_ORIGIN` | `http://localhost:3000` 으로 폴백 → 브라우저에서 전부 CORS 에러 |
+| `SUPABASE_SECRET_KEY` | 업로드만 503 |
+| `ANTHROPIC_API_KEY` | 첨삭·면접만 503 |
+| `ADMIN_EMAILS` | `/admin/*` 전원 차단 (의도된 기본값) |
+
+> **502 + CORS 에러를 CORS 설정 문제로 오진하지 마세요.** api 가 떠 있지 않으면 응답이
+> Render 엣지의 502 페이지이고 거기엔 `Access-Control-Allow-Origin` 이 없습니다. 브라우저는
+> "헤더 없음" 을 CORS 에러로 표시합니다. `curl -D - <api>/health` 로 먼저 확인하세요 —
+> `x-render-routing: no-deploy` 가 보이면 배포가 아예 없다는 뜻입니다.
+
+### api → Render
+
+설정은 레포 루트 `render.yaml` 에 있습니다. 핵심 두 가지:
+
+- **Root Directory 를 비웁니다.** Render 는 *"루트 디렉터리 밖 파일은 빌드·런타임에 제공하지
+  않는다"* 고 명시합니다. `apps/api` 로 두면 `packages/db` · `pnpm-lock.yaml` ·
+  `pnpm-workspace.yaml` 이 안 보여 빌드가 깨집니다. 대신 `buildFilter` 로 web 만 바뀐
+  커밋에서 재배포되지 않게 막습니다
+- **빌드 명령에 `pnpm db:build` 가 먼저** 와야 합니다. Prisma 7 제너레이터가 TypeScript 를
+  `packages/db/src/generated/prisma` 로 생성하고 그건 gitignore 돼 있어서, 없으면
+  `Cannot find module '@ppp/db'` 로 실패합니다
+
+```
+Build   pnpm install --frozen-lockfile && pnpm db:build && pnpm --filter api build
+Start   pnpm --filter api start:prod
+Health  /health
+Node    NODE_VERSION=22.22.0   (Render 기본값은 Node 24)
+```
+
+`PORT` 는 설정하지 않습니다 — Render 가 주입하고 `main.ts` 가 읽습니다.
+`DIRECT_URL` 도 넣지 않습니다 (마이그레이션 전용).
+
+**무료 플랜의 대가**: 15분 유휴 후 스핀다운, 재기동 약 1분. 첫 접속 때 api 호출이 그만큼
+멈춥니다. Pre-Deploy Command 와 셸 접근도 없어서 **마이그레이션은 로컬에서** 돌립니다
+(`pnpm db:deploy`). Render Postgres 는 만들지 마세요 — 무료 DB 는 30일 후 만료되고,
+DB 는 Supabase 입니다.
+
+### web → Vercel
+
+| 설정 | 값 |
+|---|---|
+| Root Directory | `apps/web` |
+| Build Command | 기본값 `next build` — **루트 `pnpm build` 를 쓰지 않습니다** (web 까지 Prisma 를 끌어옵니다) |
+| Node.js Version | 22.x |
+| Function Region | `icn1` (서울) — `proxy.ts` 가 매 요청 Supabase 를 호출합니다 |
+
+`apps/web` 은 `@ppp/db` 에 의존하지 않으므로 `pnpm db:build` 도 `DATABASE_URL` 도 필요 없습니다.
+환경변수는 `apps/web/.env.example` 의 셋이 전부이고, **모두 빌드 시점에 번들로 박힙니다** —
+값을 바꾸면 재배포해야 합니다.
+
+### Supabase 대시보드
+
+- **Authentication → URL Configuration** — Site URL 과 Redirect URLs 에
+  `https://<배포도메인>/auth/callback` 추가. `lib/origin.ts` 가 콜백 origin 을 요청 헤더에서
+  뽑으므로 로그인하려는 **모든 origin** 이 목록에 있어야 합니다
+- **Google Cloud OAuth 는 손댈 필요 없습니다** — 리디렉션 URI 는 Supabase 의
+  `https://<ref>.supabase.co/auth/v1/callback` 를 가리키고 앱 도메인과 무관합니다
+- Storage 의 비공개 `documents` 버킷은 첫 업로드 때 자동 생성됩니다
+
+---
+
 ## 다음 단계로 할 만한 것
 
-- `packages/db/prisma/schema.prisma` 에 실제 모델 추가 → `pnpm db:migrate`
 - `packages/shared` 패키지를 만들어 프론트/백 공용 DTO·타입 분리
-- Supabase Auth 연동 (NestJS 에서 JWT 검증 가드 추가)
-- 배포: `apps/web` → Vercel, `apps/api` → Railway/Render/Fly.io
-  (배포 시 마이그레이션은 `pnpm db:deploy`, 런타임은 `DATABASE_URL` 만 필요)
+- 레이트리밋을 Redis 로 (수평 확장할 때)
+- CD 자동화 — Render·Vercel 모두 push 자동배포라 꼭 필요하지는 않습니다

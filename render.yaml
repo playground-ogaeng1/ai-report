@@ -1,0 +1,65 @@
+# Render 배포 설정 (apps/api). web 은 Vercel 이므로 여기 없습니다.
+#
+# ⚠️ Blueprint 는 `name` 으로 기존 서비스를 찾습니다. 아래 이름이 대시보드의
+#    서비스 이름과 다르면 **새 서비스가 하나 더 생기고 URL 이 바뀝니다**
+#    (그러면 Vercel 의 NEXT_PUBLIC_API_URL 도 함께 고쳐야 합니다).
+#    `region` 은 서비스 생성 후 변경할 수 없으니 기존 값과 맞추세요.
+#
+# 비밀값은 전부 `sync: false` 입니다 — 대시보드의 Environment 에 직접 넣습니다.
+# .env 파일은 gitignore 대상이라 Render 로 올라가지 않습니다.
+
+services:
+  - type: web
+    name: ai-report
+    runtime: node
+    plan: free
+    region: singapore          # Render 에 서울 리전이 없습니다. Supabase(서울)에 가장 가까운 곳
+    healthCheckPath: /health   # app.service.ts 가 SELECT 1 까지 확인합니다
+
+    # ⚠️ rootDir 를 apps/api 로 두면 안 됩니다.
+    # Render 는 "루트 디렉터리 밖 파일은 빌드·런타임에 제공하지 않는다" 고 명시합니다 —
+    # packages/db 와 pnpm-lock.yaml / pnpm-workspace.yaml 이 안 보여서 빌드가 깨집니다.
+    rootDir: .
+
+    # db:build 가 **먼저** 와야 합니다. Prisma 7 의 prisma-client 제너레이터는
+    # TypeScript 를 packages/db/src/generated/prisma 로 생성하고 그건 gitignore 돼
+    # 있어서, 없으면 api 컴파일이 `Cannot find module '@ppp/db'` 로 실패합니다.
+    # 루트 `pnpm build` 는 web 까지 빌드하므로 쓰지 않습니다.
+    buildCommand: pnpm install --frozen-lockfile && pnpm db:build && pnpm --filter api build
+    startCommand: pnpm --filter api start:prod
+
+    # web 만 바뀐 커밋에서 api 가 재배포되지 않게 합니다.
+    buildFilter:
+      paths:
+        - apps/api/**
+        - packages/db/**
+        - package.json
+        - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - tsconfig.base.json
+        - render.yaml
+      ignoredPaths:
+        - apps/web/**
+
+    envVars:
+      # Render 기본값은 Node 24 입니다. CI·SETUP.md 와 같은 버전으로 고정합니다.
+      - key: NODE_VERSION
+        value: 22.22.0
+
+      # PORT 는 설정하지 않습니다 — Render 가 주입하고 main.ts 가 읽습니다.
+
+      # Vercel 프로덕션 도메인. 쉼표로 여러 개 가능(브랜치별 URL 등).
+      - { key: CORS_ORIGIN, sync: false }
+
+      # 트랜잭션 풀러(6543) + ?pgbouncer=true&connection_limit=1
+      - { key: DATABASE_URL, sync: false }
+
+      # 없으면 SupabaseAuthGuard 가 DI 시점에 throw 해서 **부팅 자체가 실패**합니다.
+      - { key: SUPABASE_URL, sync: false }
+
+      - { key: SUPABASE_SECRET_KEY, sync: false }   # 없으면 업로드만 503
+      - { key: ANTHROPIC_API_KEY, sync: false }     # 없으면 첨삭·면접만 503
+      - { key: ADMIN_EMAILS, sync: false }          # 비우면 /admin/* 전원 차단
+
+      # DIRECT_URL 은 넣지 않습니다 — 마이그레이션 전용이고 런타임은 쓰지 않습니다.
+      # 무료 플랜에는 Pre-Deploy Command 가 없어서 `pnpm db:deploy` 는 로컬에서 돌립니다.

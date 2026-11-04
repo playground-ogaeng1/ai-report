@@ -365,9 +365,31 @@ Phase 2 전에 구조를 잡았다. 자세한 디렉터리 역할은 CLAUDE.md �
 - 인증 실패 요청은 호출자가 `null` 이고 화면에 "익명" 으로 뜬다 — 누구인지
   증명하지 못한 요청이므로 그게 맞다
 
+### 배포 (2026-11-04 진행 중)
+
+**web → Vercel, api → Render, Supabase 는 DB·Auth·Storage 유지.**
+
+api 를 Render 로 보낸 이유는 **상시 실행 프로세스를 전제로 설계돼 있어서**다 —
+메모리 레이트리밋, `/admin` 링 버퍼, 스트림이 끝난 뒤에 저장하는 첨삭·총평.
+Vercel 서버리스에 올리면 앞의 둘이 무의미해지고 본문 4.5MB 제한에 업로드도 막힌다.
+
+- [x] 플랫폼 결정 + `render.yaml` 작성
+- [x] `CORS_ORIGIN` 을 쉼표 목록으로 (배포 도메인 + 로컬을 동시에 허용)
+- [x] JSON 본문 한도 1mb — 기본 100kB 가 `content` 10만자(한글 ≈300kB)보다 작았다
+- [x] 스트림 keepalive — 모델이 사고하는 동안 바이트가 0개 나가서 프록시가 끊는 걸 막음
+- [x] `apps/web/.env.example` 에 누락된 Supabase 변수 2개 추가
+- [ ] **Render 배포 성공** — 현재 `502 + x-render-routing: no-deploy` (살아있는 배포 없음)
+- [ ] 구글 로그인 왕복 / 업로드 / 첨삭 스트림 실제 확인
+- [ ] CD(배포 자동화) — push 자동배포로 충분한지 판단 후
+
+> ⚠️ **`.env` 는 전부 gitignore 대상이라 배포되지 않는다.** Render·Vercel 대시보드에
+> 직접 넣어야 한다. 특히 `SUPABASE_URL` 이 없으면 `SupabaseAuthGuard` 가 DI 시점에
+> throw 해서 **부팅 자체가 실패**한다 → 그게 `no-deploy` 로 보인다.
+>
+> ⚠️ Render 는 **루트 디렉터리 밖 파일을 빌드·런타임에 제공하지 않는다.** Root Directory 를
+> `apps/api` 로 두면 `packages/db` 와 락파일이 안 보여 깨진다 — 비워 두고 build filter 로 막는다.
+
 ### 남은 작업
 
 - [ ] 에러 처리 전반 점검 (가드 외 — 전역 예외 필터, 로깅)
-- [ ] **배포** — 대상 플랫폼 결정 필요 (web/api 를 어디에 올릴지)
-- [ ] CD(배포 자동화) — 배포 대상이 정해진 뒤
 - [ ] README 갱신 (실제 기능 반영) — 위가 끝난 뒤
