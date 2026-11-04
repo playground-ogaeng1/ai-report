@@ -68,7 +68,7 @@ export function DocumentList() {
                       })
                     }
                   >
-                    정말 삭제
+                    삭제
                   </Button>
                   <Button
                     variant="ghost"

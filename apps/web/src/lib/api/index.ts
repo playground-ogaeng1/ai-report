@@ -241,6 +241,15 @@ export type InterviewDetail = InterviewListItem & {
   messages: InterviewMessage[];
 };
 
+// ── 버그 신고 ─────────────────────────────────────────────────
+
+/** 길이 제한 — api 의 `CreateBugReportDto` 와 맞춰야 합니다. */
+export const BUG_REPORT_MIN_LENGTH = 10;
+export const BUG_REPORT_MAX_LENGTH = 5_000;
+
+/** POST /feedback/bug-report */
+export type BugReportResult = { sent: true };
+
 /** 에러 객체를 사용자에게 보여줄 문장으로 바꿉니다. */
 export function describeError(error: unknown): string {
   if (error instanceof ApiError) {

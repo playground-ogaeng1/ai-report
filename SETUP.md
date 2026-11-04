@@ -495,6 +495,48 @@ Node 는 이것을 뭉뚱그려 `fetch failed` 로만 알려줍니다.
 
 ---
 
+## 버그 신고 메일 (Google Apps Script)
+
+사용자가 **우하단 버그 신고 버튼**(모든 화면에 뜹니다)으로 보낸 내용을 관리자 메일로
+받습니다.
+메일 라이브러리를 들이지 않고 **HTTP 한 번**으로 끝내려고 Apps Script 를 씁니다
+(`apps/api` 는 `fetch` 로 그 URL 을 호출할 뿐입니다 — 발송 수단을 Resend 같은 것으로
+바꿀 때 고칠 곳은 `feedback.service.ts` 의 `send` 하나입니다).
+
+1. <https://script.google.com> → **새 프로젝트**
+2. `Code.gs` 내용을 아래로 교체 — **받는 주소를 본인 것으로 바꾸세요**
+
+```js
+// 받는 주소는 여기 하드코딩합니다. api 가 수신자를 보내게 하면
+// 이 URL 을 아는 누구나 아무 주소로 메일을 쏠 수 있는 중계기가 됩니다.
+const TO = 'you@example.com';
+
+function doPost(e) {
+  const { subject, body } = JSON.parse(e.postData.contents);
+  MailApp.sendEmail(TO, subject, body);
+  return ContentService.createTextOutput('ok');
+}
+```
+
+3. **배포 → 새 배포 → 유형: 웹 앱**
+   - 실행 계정: **나**
+   - 액세스 권한: **모든 사용자** ← api 가 토큰 없이 호출합니다
+4. 처음 배포할 때 권한 승인을 한 번 요구합니다 (Gmail 발송 권한)
+5. 나오는 `https://script.google.com/macros/s/.../exec` 를
+   `apps/api/.env` 의 `BUG_REPORT_WEBHOOK_URL` 에 넣습니다
+
+| 항목 | 값 |
+|---|---|
+| 엔드포인트 | `POST /feedback/bug-report` (로그인 필요) |
+| 레이트리밋 | 10분에 5회 — 메일 폭탄 방지. `CostGuard` 는 없습니다(Claude 미사용) |
+| 신고자 식별 | **JWT 클레임의 이메일**. 클라이언트가 보낸 값은 쓰지 않습니다 |
+| 발송 한도 | 무료 Gmail 계정의 `MailApp` 은 하루 100통 |
+
+> URL 을 넣지 않아도 서버는 정상 부팅합니다 — **버그 신고만** 503 입니다.
+> 배포 환경에서도 받으려면 Render 대시보드에 같은 값을 넣어야 합니다.
+
+---
+
 ## 자주 겪는 문제
 
 | 증상 | 원인 / 해결 |
@@ -532,6 +574,7 @@ Node 는 이것을 뭉뚱그려 `fetch failed` 로만 알려줍니다.
 | `SUPABASE_SECRET_KEY` | 업로드만 503 |
 | `ANTHROPIC_API_KEY` | 첨삭·면접만 503 |
 | `ADMIN_EMAILS` | `/admin/*` 전원 차단 (의도된 기본값) |
+| `BUG_REPORT_WEBHOOK_URL` | 버그 신고만 503 ([설정 방법](#버그-신고-메일-google-apps-script)) |
 
 > **502 + CORS 에러를 CORS 설정 문제로 오진하지 마세요.** api 가 떠 있지 않으면 응답이
 > Render 엣지의 502 페이지이고 거기엔 `Access-Control-Allow-Origin` 이 없습니다. 브라우저는

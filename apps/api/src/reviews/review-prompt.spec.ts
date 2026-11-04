@@ -51,6 +51,56 @@ describe('buildReviewSystemPrompt', () => {
     const prompt = buildReviewSystemPrompt(DocumentKind.PORTFOLIO);
     expect(prompt).toContain('본인이 무엇을 했는지 구분되는가');
   });
+
+  // 업로드는 유형이 맞는지 검사하지 않습니다(PDF 여부·크기·텍스트 추출만).
+  // 엉뚱한 파일이 들어왔을 때 영수증을 이력서 기준으로 평가하지 않게
+  // 막아주는 건 이 프롬프트뿐이라, 유형마다 들어있는지 확인합니다.
+  describe('유형이 다른 문서', () => {
+    it.each([
+      [DocumentKind.RESUME, '이력서'],
+      [DocumentKind.COVER_LETTER, '자기소개서'],
+      [DocumentKind.PORTFOLIO, '포트폴리오'],
+    ])('%s — 한 줄만 쓰고 끝내라는 탈출구가 있다', (kind, label) => {
+      const prompt = buildReviewSystemPrompt(kind);
+
+      expect(prompt).toContain(`${label}로 볼 수 없는 문서`);
+      expect(prompt).toContain('다음 한 줄만 쓰고 끝내세요');
+      expect(prompt).toContain(`${label} 양식이 아닙니다`);
+      expect(prompt).toContain('다른 섹션은 쓰지 마세요');
+    });
+
+    it.each(ALL_KINDS)(
+      '%s — 유형 판단이 출력 형식 설명보다 먼저 온다',
+      (kind) => {
+        const prompt = buildReviewSystemPrompt(kind);
+
+        // 뒤에 있으면 모델이 섹션을 다 채운 뒤에야 유형을 떠올립니다.
+        expect(prompt.indexOf('## 먼저 확인할 것')).toBeLessThan(
+          prompt.indexOf('## 출력 형식'),
+        );
+      },
+    );
+
+    it.each(ALL_KINDS)(
+      '%s — 부실한 문서를 "유형이 다르다"로 처리하지 않게 못 박는다',
+      (kind) => {
+        // 이걸 빼면 다듬어지지 않은 진짜 이력서가 한 줄로 반려됩니다.
+        // 첨삭을 받으려고 올린 사람에게 가장 쓸모없는 응답입니다.
+        const prompt = buildReviewSystemPrompt(kind);
+
+        expect(prompt).toContain('판단이 애매하면');
+        expect(prompt).toContain(
+          '형식이 거칠거나 내용이 부실한 것은 "유형이 다른 문서"가 아닙니다',
+        );
+      },
+    );
+
+    it('출력 형식은 유형이 맞을 때만 따르라고 한정한다', () => {
+      expect(buildReviewSystemPrompt(DocumentKind.RESUME)).toContain(
+        '**문서 유형이 맞는 경우에만** 아래 순서대로',
+      );
+    });
+  });
 });
 
 describe('buildReviewUserPrompt', () => {

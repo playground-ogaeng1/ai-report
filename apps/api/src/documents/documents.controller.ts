@@ -72,7 +72,13 @@ export class DocumentsController {
   @UseGuards(RateLimitGuard)
   @RateLimit({ max: 20, windowSec: 60 })
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: MAX_PDF_BYTES } }),
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_PDF_BYTES },
+      // multer 기본값이 **latin1** 입니다 (multer/index.js → busboy 의
+      // defParamCharset). 브라우저는 Content-Disposition 의 filename 을 UTF-8
+      // 바이트로 보내므로, 맞춰주지 않으면 한글 파일명이 깨져서 저장됩니다.
+      defParamCharset: 'utf8',
+    }),
   )
   uploadPdf(
     @CurrentUser() user: AuthUser,

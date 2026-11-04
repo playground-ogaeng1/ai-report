@@ -15,6 +15,7 @@ import { ReviewsModule } from './reviews/reviews.module.js';
 import { InterviewsModule } from './interviews/interviews.module.js';
 import { UsageModule } from './usage/usage.module.js';
 import { MonitoringModule } from './monitoring/monitoring.module.js';
+import { FeedbackModule } from './feedback/feedback.module.js';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { MonitoringModule } from './monitoring/monitoring.module.js';
     InterviewsModule,
     UsageModule,
     MonitoringModule,
+    FeedbackModule,
   ],
   controllers: [AppController],
   providers: [AppService, RequestLogMiddleware],
