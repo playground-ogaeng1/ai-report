@@ -60,6 +60,18 @@ const MAX_MESSAGES = 80;
 /** 면접관 턴은 짧습니다. 사고 토큰까지 감안해도 넉넉합니다. */
 const TURN_MAX_TOKENS = 4000;
 
+/**
+ * 면접관이 지원자 답변까지 혼자 써 내려가는 걸 끊는 **하드 백스톱**.
+ *
+ * 프롬프트로도 금지하지만(`buildInterviewSystemPrompt`) 프롬프트는 확률이고
+ * 이건 확정입니다. 모델이 화자 표시를 찍는 순간 생성이 멈춥니다.
+ *
+ * 줄바꿈을 앞에 붙인 이유: 면접관이 한 문장 안에서 "지원자:" 를 말할 일은
+ * 거의 없지만("지원자: 입장에서는" 같은 표현), 줄 맨 앞의 화자 표시는
+ * 사실상 대화록을 쓰기 시작한 것뿐입니다. 오탐을 줄입니다.
+ */
+const TURN_STOP_SEQUENCES = ['\n지원자:', '\n면접관:', '\nA.', '\nA:'];
+
 /** 총평은 첨삭과 비슷한 분량입니다. */
 const SUMMARY_MAX_TOKENS = 16000;
 
@@ -180,6 +192,8 @@ export class InterviewsService {
       const stream = client.messages.stream({
         model: CLAUDE_MODEL,
         max_tokens: TURN_MAX_TOKENS,
+        // 지원자 답변을 혼자 이어 쓰기 시작하면 여기서 끊습니다.
+        stop_sequences: TURN_STOP_SEQUENCES,
         // 시스템 프롬프트에 문서 전문이 들어가고 매 턴 다시 보내므로
         // 캐시를 걸어 둡니다. 두 번째 턴부터 입력 비용이 크게 줄어듭니다.
         system: [
@@ -240,7 +254,9 @@ export class InterviewsService {
         data: {
           sessionId: session.id,
           role: MessageRole.ASSISTANT,
-          content: full,
+          // stop_sequence 로 끊기면 끝에 빈 줄이 남습니다 (정지 문자열 자체는
+          // 응답에 포함되지 않습니다). 저장 전에 털어냅니다.
+          content: full.trim(),
           inputTokens: message.usage.input_tokens,
           outputTokens: message.usage.output_tokens,
         },

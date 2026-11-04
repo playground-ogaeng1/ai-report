@@ -80,6 +80,24 @@ describe('buildInterviewSystemPrompt — 공통 규칙', () => {
     );
   });
 
+  // 실제로 터진 버그: 면접관이 질문 → 지원자 답변 → 다음 질문까지 혼자
+  // 써 내려갔습니다. "질문은 한 번에 하나만" 은 "질문 여러 개를 묶지 마라"
+  // 로만 읽혀서 이걸 막지 못합니다 — 그래서 규칙을 따로 둡니다.
+  it.each(ALL)('%s — 지원자 답변을 대신 쓰지 못하게 막는다', (difficulty) => {
+    const prompt = buildInterviewSystemPrompt(difficulty, DOCUMENT);
+
+    expect(prompt).toContain('면접관의 말만 씁니다');
+    expect(prompt).toContain('지원자의 답변을 대신 쓰거나 상상해서 채우지 마세요');
+    expect(prompt).toContain('면접관의 발언 하나만');
+    expect(prompt).toContain('거기서 멈추고');
+  });
+
+  it.each(ALL)('%s — 화자 표시를 금지한다 (대화록을 쓰게 되는 입구)', (difficulty) => {
+    expect(buildInterviewSystemPrompt(difficulty, DOCUMENT)).toContain(
+      '화자 표시를 붙이지 마세요',
+    );
+  });
+
   it('문서가 있으면 본문을 컨텍스트로 넣는다', () => {
     const prompt = buildInterviewSystemPrompt(
       InterviewDifficulty.NORMAL,
@@ -102,7 +120,22 @@ describe('buildInterviewSystemPrompt — 공통 규칙', () => {
 
 describe('KICKOFF_MESSAGE', () => {
   it('고정 문자열이다 — 매 요청 맨 앞에 들어가므로 변하면 프롬프트 캐시가 깨진다', () => {
-    expect(KICKOFF_MESSAGE).toBe('면접을 시작해 주세요.');
+    expect(KICKOFF_MESSAGE).toBe(
+      '면접을 시작해 주세요. 첫 질문 하나만 하고, 제 답변을 기다려 주세요.',
+    );
+  });
+
+  // "면접을 시작해 주세요." 만 보내면 "모의 면접을 하나 만들어 달라" 는
+  // 의뢰로도 읽혀서, 모델이 지원자 답변까지 지어내 대화록을 써 버립니다.
+  it('질문 하나만 하고 멈추라고 못 박는다', () => {
+    expect(KICKOFF_MESSAGE).toContain('첫 질문 하나만');
+    expect(KICKOFF_MESSAGE).toContain('기다려');
+  });
+
+  // 지원자가 말하는 턴입니다. 지시문처럼만 쓰면 모델이 "면접 대본을
+  // 작성하는 작업" 으로 받아들이기 쉽습니다.
+  it('지원자의 목소리로 쓰여 있다 — 턴 주고받기임을 분명히 한다', () => {
+    expect(KICKOFF_MESSAGE).toContain('제 답변');
   });
 });
 
