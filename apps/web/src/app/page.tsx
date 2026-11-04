@@ -38,15 +38,10 @@ export default async function Home() {
         <AdminNavLink />
       </nav>
 
-      <section className="mt-12">
-        <h2 className="mb-4 text-lg font-semibold">사용량</h2>
-        <UsageMeter />
-      </section>
-
-      <section className="mt-12">
+      {/* <section className="mt-12">
         <h2 className="mb-4 text-lg font-semibold">연결 상태</h2>
         <ConnectionStatus />
-      </section>
+      </section> */}
     </main>
   );
 }

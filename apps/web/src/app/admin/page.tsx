@@ -5,6 +5,7 @@ import { LogView } from "@/components/admin/log-view";
 import { RequestLog } from "@/components/admin/request-log";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireClaims } from "@/lib/require-auth";
+import { UsageMeter } from "@/components/usage-meter";
 
 /**
  * 운영 조회 화면.
@@ -30,6 +31,11 @@ export default async function AdminPage() {
           </Link>
         }
       />
+
+      <section className="mt-12">
+        <h2 className="mb-4 text-lg font-semibold">사용량</h2>
+        <UsageMeter />
+      </section>
 
       <section className="mt-10">
         <h2 className="mb-3 text-lg font-semibold">엔드포인트별 집계</h2>
