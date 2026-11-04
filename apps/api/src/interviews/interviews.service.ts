@@ -24,6 +24,8 @@ import {
   buildSummarySystemPrompt,
   KICKOFF_MESSAGE,
   pickOpeningAngle,
+  QUESTION_CLOSE,
+  visibleQuestionText,
 } from './interview-prompt.js';
 
 export type InterviewEvent =
@@ -64,13 +66,20 @@ const TURN_MAX_TOKENS = 4000;
  * 면접관이 지원자 답변까지 혼자 써 내려가는 걸 끊는 **하드 백스톱**.
  *
  * 프롬프트로도 금지하지만(`buildInterviewSystemPrompt`) 프롬프트는 확률이고
- * 이건 확정입니다. 모델이 화자 표시를 찍는 순간 생성이 멈춥니다.
+ * 정지 문자열은 확정입니다. 모델이 턴을 닫는 순간 생성이 멈추므로 뒤를
+ * 이어 쓸 방법이 없습니다.
  *
- * 줄바꿈을 앞에 붙인 이유: 면접관이 한 문장 안에서 "지원자:" 를 말할 일은
- * 거의 없지만("지원자: 입장에서는" 같은 표현), 줄 맨 앞의 화자 표시는
- * 사실상 대화록을 쓰기 시작한 것뿐입니다. 오탐을 줄입니다.
+ * `QUESTION_CLOSE` 가 본체입니다. 화자 표시는 **덤** 으로만 둡니다 —
+ * 실제로 터진 출력은 `지원자:` 같은 라벨 없이 평문으로 답변을 이어 썼고,
+ * 라벨만 막아 둔 동안에는 한 번도 발동하지 않았습니다.
  */
-const TURN_STOP_SEQUENCES = ['\n지원자:', '\n면접관:', '\nA.', '\nA:'];
+const TURN_STOP_SEQUENCES = [
+  QUESTION_CLOSE,
+  '\n지원자:',
+  '\n면접관:',
+  '\nA.',
+  '\nA:',
+];
 
 /** 총평은 첨삭과 비슷한 분량입니다. */
 const SUMMARY_MAX_TOKENS = 16000;
@@ -226,15 +235,28 @@ export class InterviewsService {
         ],
       });
 
+      // 원문(태그 포함)과 이미 내려보낸 글자 수를 따로 셉니다. 태그가 델타
+      // 경계에서 쪼개져 오므로 조각을 그대로 흘려보낼 수 없습니다.
+      let raw = '';
+      let sent = 0;
+
       for await (const event of stream) {
         if (
           event.type === 'content_block_delta' &&
           event.delta.type === 'text_delta'
         ) {
-          full += event.delta.text;
-          yield { type: 'text', text: event.delta.text };
+          raw += event.delta.text;
+
+          // 태그가 완성되기 전에는 보류되므로 길이가 제자리거나 줄 수 있습니다.
+          const shown = visibleQuestionText(raw);
+          if (shown.length > sent) {
+            yield { type: 'text', text: shown.slice(sent) };
+            sent = shown.length;
+          }
         }
       }
+
+      full = visibleQuestionText(raw).trim();
 
       const message = await stream.finalMessage();
 
@@ -245,7 +267,7 @@ export class InterviewsService {
         };
         return;
       }
-      if (!full.trim()) {
+      if (!full) {
         yield { type: 'error', message: '면접관 응답이 비어 있습니다.' };
         return;
       }
@@ -254,9 +276,8 @@ export class InterviewsService {
         data: {
           sessionId: session.id,
           role: MessageRole.ASSISTANT,
-          // stop_sequence 로 끊기면 끝에 빈 줄이 남습니다 (정지 문자열 자체는
-          // 응답에 포함되지 않습니다). 저장 전에 털어냅니다.
-          content: full.trim(),
+          // 태그를 떼고 trim 까지 끝난 값입니다 (visibleQuestionText).
+          content: full,
           inputTokens: message.usage.input_tokens,
           outputTokens: message.usage.output_tokens,
         },

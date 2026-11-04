@@ -7,6 +7,9 @@ import {
   OPENING_ANGLES,
   OPENING_ANGLES_NO_DOCUMENT,
   pickOpeningAngle,
+  QUESTION_CLOSE,
+  QUESTION_OPEN,
+  visibleQuestionText,
 } from './interview-prompt.js';
 
 const DOCUMENT = {
@@ -115,6 +118,73 @@ describe('buildInterviewSystemPrompt — 공통 규칙', () => {
     expect(prompt).toContain('## 제출 문서 없음');
     expect(prompt).toContain('어떤 직무를 준비하는지 물어본 뒤');
     expect(prompt).not.toContain(DOCUMENT.content);
+  });
+});
+
+describe('buildInterviewSystemPrompt — 출력 형식', () => {
+  it.each(ALL)('%s — 발언을 태그로 감싸게 한다', (difficulty) => {
+    const prompt = buildInterviewSystemPrompt(difficulty, DOCUMENT);
+
+    expect(prompt).toContain(QUESTION_OPEN);
+    expect(prompt).toContain(QUESTION_CLOSE);
+    expect(prompt).toContain('면접관이 말할 내용 하나만');
+    expect(prompt).toContain('당신의 턴은 끝입니다');
+  });
+});
+
+/**
+ * 태그는 모델이 지원자 답변까지 이어 쓰는 걸 끊는 안전장치입니다.
+ * 이 파서가 깨지면 태그가 그대로 화면에 노출되거나 질문이 잘립니다 —
+ * 둘 다 조용히 잘못 동작하는 쪽이라 테스트로 고정합니다.
+ */
+describe('visibleQuestionText', () => {
+  it('감싼 태그를 떼어낸다', () => {
+    expect(
+      visibleQuestionText(`${QUESTION_OPEN}자기소개 부탁드립니다.${QUESTION_CLOSE}`),
+    ).toBe('자기소개 부탁드립니다.');
+  });
+
+  it('여는 태그만 있어도 (정지 문자열이 닫는 태그를 떼감) 본문을 돌려준다', () => {
+    expect(visibleQuestionText(`${QUESTION_OPEN}자기소개 부탁드립니다.`)).toBe(
+      '자기소개 부탁드립니다.',
+    );
+  });
+
+  it('여는 태그가 아직 완성되지 않았으면 보류한다 — 조각이 화면에 새면 안 된다', () => {
+    for (const partial of ['', '<', '<질', '<질문']) {
+      expect(visibleQuestionText(partial)).toBe('');
+    }
+  });
+
+  it('닫는 태그가 조각으로 남아도 떼어낸다 — 사고 토큰에 밀려 끊긴 경우', () => {
+    expect(visibleQuestionText(`${QUESTION_OPEN}질문입니다.</질문`)).toBe(
+      '질문입니다.',
+    );
+    expect(visibleQuestionText(`${QUESTION_OPEN}질문입니다.</`)).toBe('질문입니다.');
+  });
+
+  it('모델이 태그를 안 쓰면 원문을 그대로 보여준다 — 질문을 날리는 게 더 나쁘다', () => {
+    expect(visibleQuestionText('자기소개 부탁드립니다.')).toBe(
+      '자기소개 부탁드립니다.',
+    );
+  });
+
+  // 스트리밍은 누적 원문을 매 델타마다 다시 넘깁니다. 보여줄 길이가
+  // 뒤로 가서 줄어들면 이미 내려보낸 글자를 회수할 수 없습니다.
+  it('델타가 쌓이는 동안 보여줄 내용이 앞 단계를 뒤집지 않는다', () => {
+    const chunks = ['<질', '문>안녕하세요. ', '자기소개 부탁', '드립니다.', '</질문'];
+    let raw = '';
+    let previous = '';
+
+    for (const chunk of chunks) {
+      raw += chunk;
+      const shown = visibleQuestionText(raw);
+      // 길이가 보류로 제자리일 수는 있지만, 앞서 보여준 접두사는 유지돼야 합니다.
+      expect(shown.startsWith(previous) || previous.startsWith(shown)).toBe(true);
+      previous = shown;
+    }
+
+    expect(previous).toBe('안녕하세요. 자기소개 부탁드립니다.');
   });
 });
 
