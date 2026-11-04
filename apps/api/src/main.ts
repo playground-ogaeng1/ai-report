@@ -15,13 +15,25 @@ async function bootstrap() {
   // 브라우저가 api 를 직접 호출하므로(web 에 프록시가 없습니다) CORS 가 필수 경로입니다.
   // 쉼표로 여러 개를 받습니다 — 로컬 + 배포 도메인 + 필요하면 브랜치별 URL.
   // ⚠️ 커밋마다 해시가 바뀌는 Vercel 프리뷰 URL 은 여기에 넣을 수 없습니다.
-  app.enableCors({
-    origin: (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter(Boolean),
-    credentials: true,
-  });
+  const allowedOrigins = [
+  'http://localhost:3000', // 로컬 개발 환경 포트
+];
+
+app.enableCors({
+  origin: (origin, callback) => {
+    // 1. origin 정보가 없거나 (서버 간 SSR 통신, Postman 요청 등)
+    // 2. 허용 리스트에 주소가 포함되어 있거나
+    // 3. Vercel에서 파생된 모든 도메인(*.vercel.app)인 경우 모두 승인
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+  allowedHeaders: 'Content-Type, Accept, Authorization',
+});
 
   // 기본값(100kB)은 CreateDocumentDto 가 허용하는 content 100,000자보다 작습니다.
   // 한글은 UTF-8 로 글자당 3바이트라 긴 자소서가 413 으로 막혔습니다.
