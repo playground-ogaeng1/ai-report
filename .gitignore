@@ -18,6 +18,13 @@ out/
 # prisma generated client (prisma generate 로 언제든 재생성)
 packages/db/src/generated/
 
+# 하네스 step 실행 출력 (Claude stdout 원문 — 커밋하지 않는다)
+phases/**/step*-output.json
+
+# python (scripts/execute.py)
+__pycache__/
+.pytest_cache/
+
 # logs / editor / os
 *.log
 npm-debug.log*

@@ -4,12 +4,17 @@ AI 인터뷰어 & 자소서 멘토 — 취업 준비 보조 서비스.
 
 **작업 목록은 [docs/TODO.md](./docs/TODO.md) 를 보세요.** 새 작업을 시작하거나 끝낼 때 그 파일의 체크박스를 갱신합니다.
 
+`docs/` 의 나머지 네 개([PRD](./docs/PRD.md) · [ARCHITECTURE](./docs/ARCHITECTURE.md) · [ADR](./docs/ADR.md) · [UI_GUIDE](./docs/UI_GUIDE.md))는
+**하네스 가드레일**입니다 — 아래 [하네스](#하네스) 참고.
+
 ## 프로젝트 구조
 
 ```
 apps/web        Next.js 16  (App Router, Tailwind v4)   → http://localhost:3000
 apps/api        NestJS 12   (ESM)                       → http://localhost:3001
 packages/db     @ppp/db — Prisma 7 스키마 + 클라이언트
+scripts/        레포 도구 (diagnose.mjs · execute.py · hooks/)
+phases/         하네스 작업 정의 (step 파일 + 상태 인덱스)
 ```
 
 pnpm workspace 모노레포. 전체 세팅/트러블슈팅은 [SETUP.md](./SETUP.md), 명령어 표는 [README.md](./README.md).
@@ -28,6 +33,56 @@ pnpm workspace 모노레포. 전체 세팅/트러블슈팅은 [SETUP.md](./SETUP
 
 CI(`.github/workflows/ci.yml`)가 위 네 개(lint·typecheck·test·build)를 돌립니다.
 **푸시 전에 로컬에서 같은 명령으로 확인하세요.**
+
+## 하네스
+
+큰 작업은 **step 으로 쪼개 무인 실행**합니다. 설계 절차와 step 템플릿은 `/harness`, 가드레일 리뷰는 `/harness-review`.
+
+### 문서 역할 분리
+
+| 문서 | 역할 | step 프롬프트에 주입되는가 |
+|---|---|---|
+| `docs/TODO.md` | **무엇을** 할지, 무엇이 끝났는지. 사람이 읽는 상위 목록 | ✗ |
+| `docs/PRD.md` · `ARCHITECTURE.md` · `ADR.md` · `UI_GUIDE.md` | **지켜야 할 규칙**. 가드레일 | ✓ |
+| `phases/{task}/step{N}.md` | **어떻게** 할지. 무인 실행 단위 | ✓ (해당 step 만) |
+
+- `CLAUDE.md` + 가드레일 네 개가 **매 step 프롬프트에 그대로 들어갑니다**(현재 약 25,000자).
+  여기 틀린 내용이 있으면 모든 step 이 틀린 전제로 작업합니다 — 구조를 바꾸면 문서를 같이 고치세요
+- 가드레일은 **화이트리스트**입니다(`execute.py` 의 `GUARDRAIL_DOCS`). `docs/*.md` 를 전부 긁지 않습니다 —
+  진행 기록인 `TODO.md` 가 들어가면 프롬프트만 불어납니다
+- phase 가 끝나면 결과를 `docs/TODO.md` 체크박스에 반영합니다
+
+### 실행
+
+```bash
+py scripts/execute.py {task-name}          # 순차 실행 (feat-{task-name} 브랜치)
+py scripts/execute.py {task-name} --push   # 실행 후 push
+```
+
+- **Windows 에서 `python3` 은 Microsoft Store 스텁이라 동작하지 않습니다. `py` 를 쓰세요.**
+  `py` 가 "No suitable Python runtime found" 로 죽으면 `execute.py` 에 shebang 이 들어간 것입니다
+  (런처가 shebang 을 해석해 등록되지 않은 런타임을 찾습니다) — 지우거나 `uv run --no-project python` 으로 우회하세요
+- 실행기 테스트: `uv run --no-project --with pytest python -m pytest scripts/test_execute.py -q`
+- 실행 전에 `pnpm test` 가 통과하는지 확인하세요 — 깨진 상태로 시작하면 모든 step 이 AC 에서 실패합니다
+- `execute.py` 는 `git add -A` 로 쓸어담아 커밋합니다. 워킹 트리를 먼저 정리하세요
+- step 은 `--dangerously-skip-permissions` 로 돕니다. **`db:migrate`·`db:deploy`·`.env` 수정은
+  step 금지사항에 박아두고**, 필요하면 `blocked` 로 세워 사용자에게 넘깁니다
+
+### 훅 (`.claude/settings.json`)
+
+| 이벤트 | 하는 일 |
+|---|---|
+| `PreToolUse(Bash)` | `scripts/hooks/block-dangerous-bash.mjs` — `rm -rf`·`git push --force`·`reset --hard`·파괴적 DDL·`db:deploy`·`.env` 덮어쓰기를 차단 |
+| `Stop` | `scripts/hooks/quality-gate.mjs` — `pnpm lint` + `pnpm typecheck` 를 돌리고 실패하면 끝내지 못하게 막음 |
+
+훅을 고칠 때 지켜야 하는 규약 (어기면 **조용히 아무 일도 하지 않습니다**):
+
+- 입력은 **stdin JSON** 입니다. `$CLAUDE_TOOL_INPUT` 같은 환경변수는 없습니다
+- 차단하는 종료 코드는 **2** 뿐입니다. `exit 1` 은 "훅이 실패했다"로 처리되고 동작은 그대로 진행됩니다
+- Claude 가 읽는 메시지는 **stderr** 입니다. `2>&1` 로 접으면 차단 메시지가 빈 문자열이 됩니다
+- `Stop` 훅은 `stop_hook_active` 를 확인해야 합니다 — 안 하면 무한 루프입니다
+- 훅은 bash 가 아니라 **node 스크립트**로 둡니다. 이 환경엔 `jq` 가 없고 훅을 실행하는 셸도 보장되지 않습니다
+- `Stop` 훅에 `pnpm test`·`pnpm build` 를 넣지 마세요. 느리고, CI 가 이미 돌립니다
 
 ## 규칙
 

@@ -95,10 +95,15 @@ describe('buildInterviewSystemPrompt — 공통 규칙', () => {
     expect(prompt).toContain('거기서 멈추고');
   });
 
+  // 문장 전체를 고정하지 않습니다 — 프롬프트에는 강조 부사("절대" 등)가
+  // 수시로 끼어들고, 그때마다 깨지면 테스트가 의도를 지키는 게 아니라
+  // 표현을 얼려 버립니다. 확인할 것은 **규칙의 존재와 구체 예시** 둘입니다.
   it.each(ALL)('%s — 화자 표시를 금지한다 (대화록을 쓰게 되는 입구)', (difficulty) => {
-    expect(buildInterviewSystemPrompt(difficulty, DOCUMENT)).toContain(
-      '화자 표시를 붙이지 마세요',
-    );
+    const prompt = buildInterviewSystemPrompt(difficulty, DOCUMENT);
+
+    expect(prompt).toMatch(/화자 표시를 .*붙이지 마세요/);
+    // 예시가 없으면 모델이 무엇을 말하는지 모릅니다.
+    expect(prompt).toContain("'면접관:', '지원자:'");
   });
 
   it('문서가 있으면 본문을 컨텍스트로 넣는다', () => {
@@ -191,12 +196,12 @@ describe('visibleQuestionText', () => {
 describe('KICKOFF_MESSAGE', () => {
   it('고정 문자열이다 — 매 요청 맨 앞에 들어가므로 변하면 프롬프트 캐시가 깨진다', () => {
     expect(KICKOFF_MESSAGE).toBe(
-      '면접을 시작해 주세요. 첫 질문 하나만 하고, 제 답변을 기다려 주세요.',
+      '지원자가 면접실에 입장했습니다. 첫 질문 하나만 하고, 제 답변을 기다려 주세요.',
     );
   });
 
-  // "면접을 시작해 주세요." 만 보내면 "모의 면접을 하나 만들어 달라" 는
-  // 의뢰로도 읽혀서, 모델이 지원자 답변까지 지어내 대화록을 써 버립니다.
+  // 상황 설정 한 줄만 보내면 "모의 면접을 하나 만들어 달라" 는 의뢰로도
+  // 읽혀서, 모델이 지원자 답변까지 지어내 대화록을 써 버립니다.
   it('질문 하나만 하고 멈추라고 못 박는다', () => {
     expect(KICKOFF_MESSAGE).toContain('첫 질문 하나만');
     expect(KICKOFF_MESSAGE).toContain('기다려');
@@ -206,6 +211,15 @@ describe('KICKOFF_MESSAGE', () => {
   // 작성하는 작업" 으로 받아들이기 쉽습니다.
   it('지원자의 목소리로 쓰여 있다 — 턴 주고받기임을 분명히 한다', () => {
     expect(KICKOFF_MESSAGE).toContain('제 답변');
+  });
+
+  // 문서 없이 보는 면접도 있고(OPENING_ANGLES_NO_DOCUMENT), 자소서·포트폴리오로도
+  // 봅니다. 이 메시지는 모든 경우에 공통으로 들어가므로 특정 문서를 전제하면
+  // 없는 문서를 근거로 질문하게 됩니다.
+  it('특정 문서 종류를 전제하지 않는다', () => {
+    for (const word of ['이력서', '자기소개서', '자소서', '포트폴리오']) {
+      expect(KICKOFF_MESSAGE).not.toContain(word);
+    }
   });
 });
 
