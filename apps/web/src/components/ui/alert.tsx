@@ -14,15 +14,23 @@ export function Alert({
   tone = "info",
   title,
   children,
+  action,
 }: {
   tone?: AlertTone;
   title: ReactNode;
   children?: ReactNode;
+  /** 오른쪽에 붙는 액션 (예: "등록하기 →" 링크). 좁은 화면에서는 아래로 내려갑니다. */
+  action?: ReactNode;
 }) {
   return (
-    <div className={`rounded-lg border p-4 text-sm ${TONE_CLASS[tone]}`}>
-      <p className="font-medium">{title}</p>
-      {children && <div className="mt-1 text-xs opacity-80">{children}</div>}
+    <div
+      className={`flex flex-col gap-3 rounded-lg border p-4 text-sm sm:flex-row sm:items-center sm:justify-between ${TONE_CLASS[tone]}`}
+    >
+      <div>
+        <p className="font-medium">{title}</p>
+        {children && <div className="mt-1 text-xs opacity-80">{children}</div>}
+      </div>
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }
