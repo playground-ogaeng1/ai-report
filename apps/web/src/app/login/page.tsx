@@ -1,7 +1,14 @@
 import { redirect } from "next/navigation";
 
+import { Alert } from "@/components/ui/alert";
+import { GoogleMark } from "@/components/ui/google-mark";
+import { HologramBackdrop } from "@/components/ui/hologram-backdrop";
+import { StepChips } from "@/components/ui/step-chips";
 import { getOrigin } from "@/lib/origin";
 import { createClient } from "@/lib/supabase/server";
+
+/** 로그인하면 무엇을 하게 되는지 — 홈의 01/02/03 카드와 같은 순서입니다. */
+const STEPS = ["문서 등록", "문장별 첨삭", "꼬리질문 면접"];
 
 /** 오픈 리다이렉트 방지 — 같은 사이트의 경로만 허용합니다. */
 function safePath(value: string | undefined): string {
@@ -43,32 +50,51 @@ export default async function LoginPage({
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-6 py-16">
-      <h1 className="text-2xl font-bold tracking-tight">
-        AI 인터뷰어 &amp; 자소서 멘토
-      </h1>
-      <p className="mt-2 text-sm text-black/60 dark:text-white/60">
-        이력서와 자소서를 등록하고, 첨삭과 모의 면접을 받아보세요.
-      </p>
+    <>
+      <HologramBackdrop />
 
-      {error && (
-        <p className="mt-6 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
-          로그인에 실패했습니다: {error}
+      <main className="relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-16 text-center">
+        <p className="text-sm font-semibold text-black/60 dark:text-white/60">
+          AI 인터뷰어 &amp; 자소서 멘토
         </p>
-      )}
 
-      <form className="mt-8" action={signInWithGoogle}>
-        <button
-          type="submit"
-          className="w-full rounded-lg border border-black/15 px-4 py-3 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-        >
-          구글로 계속하기
-        </button>
-      </form>
+        <h1 className="mt-3 text-3xl font-bold tracking-tight">
+          내가 쓴 문장에서 시작하는 면접 준비.
+        </h1>
 
-      <p className="mt-6 text-xs text-black/50 dark:text-white/50">
-        구글 로그인만 지원합니다.
-      </p>
-    </main>
+        <p className="mt-3 text-sm text-black/60 dark:text-white/60">
+          이력서와 자소서를 등록하고, 첨삭과 모의 면접을 받아보세요.
+        </p>
+
+        {error && (
+          // 메시지가 길 수 있어 알림 안쪽은 왼쪽으로 맞춥니다.
+          <div className="mt-8 text-left">
+            <Alert tone="error" title="로그인에 실패했습니다.">
+              {error}
+            </Alert>
+          </div>
+        )}
+
+        <form className="mt-8" action={signInWithGoogle}>
+          <button
+            type="submit"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-black/15 px-4 py-3 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          >
+            <GoogleMark />
+            구글로 계속하기
+          </button>
+        </form>
+
+        <p className="mt-4 text-xs text-black/50 dark:text-white/50">
+          구글 로그인만 지원합니다.
+        </p>
+
+        <div className="mt-10 border-t border-black/10 dark:border-white/15" />
+
+        <div className="mt-6">
+          <StepChips steps={STEPS} />
+        </div>
+      </main>
+    </>
   );
 }

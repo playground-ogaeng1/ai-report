@@ -2,8 +2,8 @@ import Link from "next/link";
 
 import { AdminNavLink } from "@/components/admin-nav-link";
 import { DocumentCta } from "@/components/document-cta";
+import { RecentActivity } from "@/components/recent-activity";
 import { SignOutButton } from "@/components/sign-out-button";
-import { UsageMeter } from "@/components/usage-meter";
 import { FeatureCard } from "@/components/ui/feature-card";
 import { displayNameOf, requireClaims } from "@/lib/require-auth";
 
@@ -65,12 +65,11 @@ export default async function Home() {
       </nav>
 
       <section className="mt-16">
-        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-          당신의 경험이 합격의 확신이 되도록.
+        <h1 className="text-3xl font-bold tracking-tight">
+          일반론 대신, 내가 쓴 문장.
         </h1>
-        <p className="mt-4 text-base text-black/60 dark:text-white/60">
-          AI 가 자소서 첨삭부터 꼬리질문 면접까지 — 내가 쓴 문장을 근거로
-          진행합니다.
+        <p className="mt-3 text-sm text-black/60 dark:text-white/60">
+          등록한 이력서·자소서를 근거로 첨삭과 모의 면접을 진행합니다.
         </p>
       </section>
 
@@ -92,15 +91,7 @@ export default async function Home() {
         <DocumentCta />
       </div>
 
-      <section className="mt-12 border-t border-black/10 pt-8 dark:border-white/15">
-        <h2 className="mb-4 text-lg font-semibold">최근 사용량</h2>
-        <UsageMeter />
-        <p className="mt-3 text-xs text-black/50 dark:text-white/50">
-          첨삭과 면접은 Claude 를 호출하므로 24시간 누적 토큰에 한도가 있습니다.
-          한도에 닿아도 문서 등록·조회는 그대로 쓸 수 있고, 시간이 지나면
-          자동으로 풀립니다.
-        </p>
-      </section>
+      <RecentActivity />
     </main>
   );
 }
