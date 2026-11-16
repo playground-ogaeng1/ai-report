@@ -66,10 +66,10 @@ export default async function Home() {
 
       <section className="mt-16">
         <h1 className="text-3xl font-bold tracking-tight">
-          일반론 대신, 내가 쓴 문장.
+          내가 쓴 문장에서 시작하는 면접 준비.
         </h1>
         <p className="mt-3 text-sm text-black/60 dark:text-white/60">
-          등록한 이력서·자소서를 근거로 첨삭과 모의 면접을 진행합니다.
+          AI가 자소서 첨삭부터 꼬리질문 면접까지 내가 쓴 문장을 근거로 진행합니다.
         </p>
       </section>
 

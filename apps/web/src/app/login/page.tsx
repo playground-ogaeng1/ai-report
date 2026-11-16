@@ -59,7 +59,7 @@ export default async function LoginPage({
         </p>
 
         <h1 className="mt-3 text-3xl font-bold tracking-tight">
-          내가 쓴 문장에서 시작하는 면접 준비.
+          나 혼자 하는 면접 준비
         </h1>
 
         <p className="mt-3 text-sm text-black/60 dark:text-white/60">
